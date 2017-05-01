@@ -1,0 +1,1 @@
+Contains all figures created automatically from knit2html
