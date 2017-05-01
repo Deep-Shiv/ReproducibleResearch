@@ -1,0 +1,93 @@
+
+# Reading File and Cleaning File
+```{r reading csv file, echo=TRUE}
+temp <- tempfile()
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip",temp)
+origdata <- read.csv(unz(temp, "activity.csv"),header = TRUE, sep = ",",colClasses=c("numeric", "character", "numeric"))
+nonadata<-na.omit(origdata)
+
+```
+
+# What is mean total number of steps taken per day?
+## Ignoring the missing values
+
+```{r mean total number of steps, echo=TRUE}
+print("Histogram of mean number of steps taken per day")
+library(ggplot2)
+total.steps <- tapply(nonadata$steps, nonadata$date, FUN=sum)
+qplot(total.steps, binwidth=1000, xlab="total number of steps taken each day")
+print("The mean and median are:")
+mean(total.steps)
+median(total.steps)
+
+```
+
+#What is the average daily activity pattern?
+
+```{r average daily activity pattern, echo=TRUE}
+
+avgpattern <- aggregate(nonadata[c("steps")], list(interval = nonadata$interval), mean)
+amax<-max(avgpattern[,2])
+newdata <- subset(avgpattern,avgpattern[,2]==amax)
+newdata<-newdata[order("interval"),]
+print(paste0("The interval ",newdata[1,]$interval," has maximum number of steps of ",amax))
+
+ggplot(data=avgpattern, aes(x=interval, y=steps)) +
+    geom_line() +
+    xlab("5-minute interval") +
+    ylab("average number of steps taken")
+
+```
+
+#Imputing missing values
+##Calculting the total number of missing values in the dataset by computing difference in the number of rows between the original data frame and data frame where NA values were removed
+```{r total number if missing values, echo=TRUE}
+diff<-nrow(origdata)-nrow(nonadata)
+print(paste0("The number of missing values is ",diff))
+```
+
+##Filling in missing values using mean of that interval and created new data set
+```{r imputing missing values, echo=TRUE}
+library(sqldf)
+
+tmp2 <- sqldf("SELECT avgpattern.steps,origdata.date,origdata.interval fROM origdata,avgpattern where origdata.steps is NULL and origdata.interval=avgpattern.interval")
+imputedata<-rbind(nonadata,tmp2)
+```
+
+##Make a histogram of the total number of steps taken each day along with mean and median
+###Plotting a histogram of the daily total number of steps taken, plotted with a bin interval of 1000 steps, after filling missing values.
+```{r new mean total number of steps with new data, echo=TRUE}
+
+library(ggplot2)
+total1.steps <- tapply(imputedata$steps, imputedata$date, FUN=sum)
+qplot(total1.steps, binwidth=1000, xlab="total number of steps taken each day")
+mean(total1.steps)
+median(total1.steps)
+```
+## Calculating difference between imputed and non imputed data
+```{r mean and median difference, echo=TRUE}
+
+meandiff<-mean(total.steps)-mean(total1.steps)
+mediandiff<-median(total.steps)-median(total1.steps)
+```
+
+#Are there differences in activity patterns between weekdays and weekends?
+```{r weekday weekend pattern differences, echo=TRUE}
+
+library(chron)
+imputedata$weektype<-chron::is.weekend(imputedata$date)
+
+aadi <- aggregate(steps ~ interval + weektype, data=imputedata, mean)
+ggplot(aadi[aadi$weektype=="FALSE",], aes(interval, steps)) + 
+    geom_line() + 
+    xlab("5-minute interval") + 
+    ylab("avarage number of steps") + ggtitle("weekday")
+
+ggplot(aadi[aadi$weektype=="TRUE",], aes(interval, steps)) + 
+    geom_line() + 
+    xlab("5-minute interval") + 
+    ylab("avarage number of steps") + ggtitle("weekend")
+
+total2.steps <- tapply(aadi$steps, aadi$weektype, FUN=sum)
+if (total2.steps[1]>total2.steps[2]) {print("Weekday mean is higher")} else {"Weekend mean is higher"}
+```
